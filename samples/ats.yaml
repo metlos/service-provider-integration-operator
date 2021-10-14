@@ -3,11 +3,10 @@ kind: AccessTokenSecret
 metadata:
   name: ats
 spec:
-  serviceAccount:
-    name: default
-  accessTokenId: kachny
+  accessTokenName: t1
   target:
     configMap:
-        name: kachnyAccess
+        name: spi-data
+        accessTokenKey: GITHUB_TOKEN
         labels:
           yiee: haa

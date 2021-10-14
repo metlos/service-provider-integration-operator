@@ -19,12 +19,16 @@ package controllers
 import (
 	"context"
 	stderrors "errors"
+	"io/ioutil"
+	"net/http"
+	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +40,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	api "github.com/redhat-appstudio/service-provider-integration-operator/api/v1beta1"
+	"github.com/redhat-appstudio/service-provider-integration-operator/pkg/config"
 	"github.com/redhat-appstudio/service-provider-integration-operator/pkg/sync"
 )
 
@@ -43,25 +48,32 @@ var (
 	secretDiffOpts = cmp.Options{
 		cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta", "ObjectMeta"),
 	}
+
+	tokenEndpoint = config.SpiUrl() + "/api/v1/token/"
 )
 
 // AccessTokenSecretReconciler reconciles a AccessTokenSecret object
 type AccessTokenSecretReconciler struct {
+	config *rest.Config
 	client.Client
 	Scheme *runtime.Scheme
 	syncer sync.Syncer
 }
 
-func NewAccessTokenSecretReconciler(cl client.Client, scheme *runtime.Scheme) *AccessTokenSecretReconciler {
+func NewAccessTokenSecretReconciler(config *rest.Config, cl client.Client, scheme *runtime.Scheme) *AccessTokenSecretReconciler {
 	return &AccessTokenSecretReconciler{
+		config: config,
 		Client: cl,
 		Scheme: scheme,
 		syncer: sync.New(cl, scheme),
 	}
 }
 
-// TODO define this properly once we know more
-type accessToken map[string]string
+// This must reflect the data returned from the SPI REST API
+type accessToken struct {
+	Name  string `json:"name"`
+	Token string `json:"token"`
+}
 
 //+kubebuilder:rbac:groups=appstudio.redhat.com,resources=accesstokensecrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=appstudio.redhat.com,resources=accesstokensecrets/status,verbs=get;update;patch
@@ -70,6 +82,7 @@ type accessToken map[string]string
 
 func (r *AccessTokenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	lg := log.FromContext(ctx, "AccessTokenSecret", req.NamespacedName)
+	ctx = log.IntoContext(ctx, lg)
 
 	ats := api.AccessTokenSecret{}
 
@@ -85,13 +98,13 @@ func (r *AccessTokenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	cl, err := r.getImpersonatedClient(log.IntoContext(ctx, lg), &ats)
+	cl, err := r.getAuthenticatedClient()
 	if err != nil {
 		// TODO update the status with the failure
 		return ctrl.Result{}, err
 	}
 
-	token, err := readAccessToken(log.IntoContext(ctx, lg.WithValues("ImpersonatedAs", ats.Spec.ServiceAccount)), &cl, ats.Spec.AccessTokenId)
+	token, err := readAccessToken(ctx, cl, &ats)
 	if err != nil {
 		// TODO update the status with the failure
 		return ctrl.Result{}, err
@@ -127,51 +140,80 @@ func (r *AccessTokenSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// TODO look for some label for example
 			return []reconcile.Request{}
 		})).
+		Watches(&source.Kind{Type: &corev1.Pod{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+			// TODO look for some label for example
+			return []reconcile.Request{}
+		})).
 		Complete(r)
 }
 
-func (r *AccessTokenSecretReconciler) getImpersonatedClient(ctx context.Context, acs *api.AccessTokenSecret) (client.Client, error) {
-	lg := log.FromContext(ctx)
+func (r *AccessTokenSecretReconciler) getAuthenticatedClient() (*http.Client, error) {
+	clientConfig := rest.CopyConfig(r.config)
 
-	sa := acs.Spec.ServiceAccount
-	if sa.Name == "" {
-		return r.Client, nil
+	// make it possible to run outside of the cluster with some auth token
+	if clientConfig.BearerTokenFile == "" {
+		f := config.BearerTokenFile()
+		// only use the token file if it exists
+		if _, err := os.Stat(f); err == nil {
+			clientConfig.BearerTokenFile = f
+		}
 	}
 
-	if sa.Namespace == "" {
-		sa.Namespace = acs.GetNamespace()
-	}
-
-	clientConfig, err := ctrl.GetConfig()
+	t, err := rest.TransportFor(clientConfig)
 	if err != nil {
-		lg.Error(err, "Failed to get the configuration for talking to the Kubernetes API server")
+		return nil, err
 	}
 
-	clientConfig.Impersonate = rest.ImpersonationConfig{
-		UserName: "system:serviceaccount:" + sa.Namespace + ":" + sa.Name,
-	}
-
-	return client.New(clientConfig, client.Options{
-		Scheme: r.Scheme,
-		Mapper: r.RESTMapper(),
-	})
+	cl := http.Client{Transport: t}
+	return &cl, nil
 }
 
-func readAccessToken(ctx context.Context, cl *client.Client, tokenId string) (accessToken, error) {
-	// TODO implement
-	return accessToken{}, nil
+func readAccessToken(ctx context.Context, cl *http.Client, ats *api.AccessTokenSecret) (accessToken, error) {
+	token := accessToken{}
+
+	resp, err := cl.Get(tokenEndpoint + ats.Spec.AccessTokenName)
+	if err != nil {
+		return token, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return token, err
+	}
+
+	if err = json.Unmarshal(data, &token); err != nil {
+		return token, err
+	}
+
+	return token, nil
 }
 
 func (r *AccessTokenSecretReconciler) saveTokenAsConfigMap(ctx context.Context, owner *api.AccessTokenSecret, token *accessToken, spec *api.AccessTokenTargetConfigMap) error {
-	// TODO implement
-	return stderrors.New("saving accesstokens to config map not implemented")
+	data := map[string]string{}
+	data[spec.AccessTokenKey] = token.Token
+
+	cm := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        spec.Name,
+			Namespace:   owner.GetNamespace(),
+			Labels:      spec.Labels,
+			Annotations: spec.Annotations,
+		},
+		Data: data,
+	}
+
+	_, _, err := r.syncer.Sync(ctx, owner, cm, secretDiffOpts)
+	return err
 }
 
 func (r *AccessTokenSecretReconciler) saveTokenAsSecret(ctx context.Context, owner *api.AccessTokenSecret, token *accessToken, spec *api.AccessTokenTargetSecret) error {
 	data := map[string][]byte{}
-	for k, v := range *token {
-		data[k] = []byte(v)
-	}
+	data[spec.AccessTokenKey] = []byte(token.Token)
 
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{

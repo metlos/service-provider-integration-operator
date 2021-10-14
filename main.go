@@ -33,6 +33,7 @@ import (
 
 	appstudiov1beta1 "github.com/redhat-appstudio/service-provider-integration-operator/api/v1beta1"
 	"github.com/redhat-appstudio/service-provider-integration-operator/controllers"
+	"github.com/redhat-appstudio/service-provider-integration-operator/pkg/config"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -65,6 +66,11 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	if err := config.ValidateEnv(); err != nil {
+		setupLog.Error(err, "invalid configuration")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -78,7 +84,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (controllers.NewAccessTokenSecretReconciler(mgr.GetClient(), mgr.GetScheme())).SetupWithManager(mgr); err != nil {
+	if err = (controllers.NewAccessTokenSecretReconciler(mgr.GetConfig(), mgr.GetClient(), mgr.GetScheme())).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessTokenSecret")
 		os.Exit(1)
 	}

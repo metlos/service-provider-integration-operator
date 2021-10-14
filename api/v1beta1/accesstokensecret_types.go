@@ -22,13 +22,13 @@ import (
 
 // AccessTokenSecretSpec defines the desired state of AccessTokenSecret
 type AccessTokenSecretSpec struct {
-	// ServiceAccount is the service account to impersonate as when retrieving the access token from the storage
-	// If the namespace is not specified, the namespace of this object is assumed
-	// If the name is not specified, the controller attempts to access the storage using its service account
-	ServiceAccount NamespacedName `json:"serviceAccount"`
+	// TODO use this
+	// SpiAccessSecret is the unique string provided when an access token was stored using
+	// Service Provider Integration REST API.
+	//SpiAccessSecret string `json:"spiAccessSecret"`
 
-	// AccessTokenId is the ID of the access token in the storage
-	AccessTokenId string `json:"accessTokenId"`
+	// AccessTokenName is the ID of the access token in the storage
+	AccessTokenName string `json:"accessTokenName"`
 
 	// Target specifies the object to which the access token should be persisted to
 	Target AccessTokenTarget `json:"target"`
@@ -93,20 +93,25 @@ type AccessTokenTarget struct {
 }
 
 type AccessTokenTargetConfigMap struct {
-	Name        string            `json:"name"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Name string `json:"name"`
+	// AccessTokenKey is the key in the data of the configmap that should contain the token
+	AccessTokenKey string            `json:"accessTokenKey"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	Annotations    map[string]string `json:"annotations,omitempty"`
 }
 
 type AccessTokenTargetSecret struct {
-	Name        string            `json:"name"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Name string `json:"name"`
+	// AccessTokenKey is the key in the data of the configmap that should contain the token
+	AccessTokenKey string            `json:"accessTokenKey"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	Annotations    map[string]string `json:"annotations,omitempty"`
 }
 
 type AccessTokenTargetContainers struct {
 	PodLabels  metav1.LabelSelector `json:"podLabels"`
 	Containers []string             `json:"containers"`
+	MountPath  string               `json:"mountPath"`
 }
 
 func init() {
