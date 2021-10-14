@@ -1,0 +1,15 @@
+# This is a simple kustomization that just builds the RBAC
+
+namespace: default
+
+namePrefix: spi-
+
+commonLabels:
+  app.kubernetes.io/name: service-provider-integration-operator
+  app.kubernetes.io/part-of: service-provider-integration-operator
+  
+generatorOptions:
+  disableNameSuffixHash: true
+
+resources:
+- ../rbac

@@ -1,0 +1,12 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "getAccessToken",
+            "type": "shell",
+            // This assumes the data and names from the samples directory
+            // We want to have a token of the operator, but impersonate as the service account configured in the ATS CR
+            "command": "kubectl get secret $(kubectl get serviceaccount spi-controller-manager -o 'jsonpath={.secrets[0].name}') -o jsonpath={.data.token} | base64 -d > .token"
+        }
+    ]
+}

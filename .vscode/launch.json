@@ -10,6 +10,11 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/main.go",
+            "env": {
+                "SERVICE_ACCOUNT_TOKEN_FILE": "${workspaceFolder}/.token",
+                "VAULT_URL": "http://127.0.0.1:8200"
+            },
+            "preLaunchTask": "getAccessToken"
         }
     ]
 }

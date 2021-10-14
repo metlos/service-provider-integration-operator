@@ -1,0 +1,23 @@
+---
+# This represents a service account with minimal access to Vault required to read the secrets that are being read using
+# ats.yaml. I.e. the service account and the ats.yaml are the two pieces of information that are supposed to be 
+# supplied by the use of SPI.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-tool-vault-access
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:  
+  name: my-tool-tokenreviews-binding
+roleRef:  
+  apiGroup: rbac.authorization.k8s.io  
+  kind: ClusterRole  
+  name: system:auth-delegator
+subjects:  
+- kind: ServiceAccount    
+  name: my-tool-vault-access    
+  namespace: default
+  

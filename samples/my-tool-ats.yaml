@@ -1,13 +1,14 @@
 apiVersion: appstudio.redhat.com/v1beta1
 kind: AccessTokenSecret
 metadata:
-  name: ats
+  name: my-tool
+  namespace: default
 spec:
   serviceAccount:
-    name: default
-  accessTokenId: kachny
+    name: my-tool-vault-access
+  accessTokenId: secret/data/my-tool/config
   target:
     configMap:
-        name: kachnyAccess
+        name: kachny-access
         labels:
           yiee: haa
