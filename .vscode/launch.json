@@ -10,6 +10,12 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/main.go",
+            "args": ["-metrics-bind-address", "0"],
+            "env": {
+                "SPI_URL": "http://localhost:8080",
+                "SPI_BEARER_TOKEN_FILE": "${workspaceFolder}/.token"
+            },
+            "preLaunchTask": "getAccessToken",
         }
     ]
 }

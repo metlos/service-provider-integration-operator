@@ -146,6 +146,9 @@ docker-push: ## Push docker image with the manager.
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
+prepare: install ## In addition to CRDs also install the RBAC rules
+	$(KUSTOMIZE) build config/prepare | kubectl apply -f -
+
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
