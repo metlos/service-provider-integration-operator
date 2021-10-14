@@ -3,7 +3,6 @@
 # It should be run by config/default
 resources:
 - bases/appstudio.redhat.com_accesstokensecrets.yaml
-- bases/appstudio.redhat.com_serviceproviderintergrationoperatorconfigurations.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
